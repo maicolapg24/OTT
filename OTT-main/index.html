@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ArcGIS MapView App</title>
+  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://js.arcgis.com/calcite-components/2.10.1/calcite.esm.js" type="module"></script>
+  <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.10.1/calcite.css" />
+
+  <script src="https://js.arcgis.com/4.30/"></script>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css" />
+  
+</head>
+
+<body>
+  <pre id="output"></pre>
+  <calcite-shell content-behind>
+    <calcite-shell-panel slot="panel-start" display-mode="float" width-scale="l">
+      <calcite-action-bar slot="action-bar">
+        <calcite-action data-action-id="layers" icon="layers" text="Layers"></calcite-action>
+        <calcite-action data-action-id="legend" icon="legend" text="Leyenda"></calcite-action>
+        <calcite-action data-action-id="timeExtent" icon="clock" text="Time extent"></calcite-action>
+        <calcite-action data-action-id="information" icon="information" text="Información"></calcite-action>
+      </calcite-action-bar>
+      <!-- Map-specific panels (each one provides a div for ArcGIS Maps SDK for JavaScript widgets) -->
+      <calcite-panel heading="Layers" height-scale="l" data-panel-id="layers" hidden>
+        <div id="layers-container"></div>
+      </calcite-panel>
+      <calcite-panel heading="Leyenda" height-scale="l" data-panel-id="legend" hidden>
+        <div id="legend-container"></div>
+      </calcite-panel>
+      <calcite-panel heading="Time Extent" height-scale="l" width-scale="l" data-panel-id="timeExtent" hidden>
+        <div id="timeExtent-container"></div>
+      </calcite-panel>
+
+      <!-- Info panel-->
+      <calcite-panel heading="Información" data-panel-id="information" hidden>
+        <div id="info-content">
+          <div id="item-description" class="info-panel">
+            Demo aplicación planet analitycs / insights
+          </div>
+
+        </div>
+      </calcite-panel>
+    </calcite-shell-panel>
+
+    <div id="viewDiv"></div>
+
+  </calcite-shell>
+
+  <!-- Buttons on UI -->
+  <button class="custom-button" id="drawButton">
+    <calcite-icon icon="polygon" scale="s"></calcite-icon><span class="hover-text" hidden> Dibujar AOI</span>
+  </button>
+  <input type="file" accept=".geojson, .json" id="browseGeoJson" hidden>
+  <button class="custom-button" id="uploadGeoJsonButton">
+    <calcite-icon icon="folder-open" scale="s"></calcite-icon><span class="hover-text" hidden> Cargar AOI</span>
+  </button>
+  <button class="custom-button" id="timeSeriesButton" disabled>
+    <calcite-icon icon="graph-time-series" scale="s"></calcite-icon><span class="hover-text" hidden> Series de
+      tiempo</span>
+  </button>
+  <button class="custom-button" id="planetSubsButton">
+    <calcite-icon icon="satellite-0" scale="s"></calcite-icon><span class="hover-text" hidden> Planet analitycs</span>
+  </button>
+  <button class="custom-button" id="deforestationButton" disabled>
+    <calcite-icon icon="analysis" scale="s"></calcite-icon><span class="hover-text" hidden> Map deforestation</span>
+  </button>
+  <button class="custom-button" id="downloadpolButton" disabled>
+    <calcite-icon icon="download" scale="s"></calcite-icon><span class="hover-text" hidden> Download polygon</span>
+  </button>
+  <button class="custom-button" id="downloadpolBurnsButton" disabled>
+    <calcite-icon icon="brush-tip" scale="s"></calcite-icon><span class="hover-text" hidden> Download burns zones</span>
+  </button>
+  <button class="custom-button" id="CatalogButton" disabled>
+    <calcite-icon icon="catalog-dataset" scale="s"></calcite-icon><span class="hover-text" hidden> Search Catalog</span>
+  </button>
+
+  <!-- Dialogo draw button  -->
+
+  <div id="drawDialog" class="dialog" style="display: none;">
+    <div class="dialog-header" id="drawDialogHeader">
+      <h2>AOI por actividad</h2>
+      <button id="closeDialogAOI" class="close-button">
+        <calcite-icon icon ="x-circle" scale = "m"></calcite-icon>
+      </button>
+    </div>
+    <div class="dialog-content">
+      <button id="btnAOIGeneral">  AOI General</button>
+      <button id="btnAOIPlanet">  AOI Busqueda Planet</button>
+    </div>
+    
+  </div>
+
+  <!-- Dialog HTML for graphs -->
+  <div id="timeSeriesDialog" class="dialog" style="display: none">
+    <div class="dialog-header" id="timeSeriesDialogHeader">
+      <h2>Series de tiempo variables del territorio</h2>
+      <button id="closeDialogButton" class="close-button">
+        <calcite-icon icon="x-circle" scale="m"></calcite-icon>
+      </button>
+    </div>
+    <div class="dialog-content">
+      <label for="startDate">Inicio:</label>
+      <input type="date" id="startDate" name="startDate" required />
+      <label for="endDate">Final:</label>
+      <input type="date" id="endDate" name="endDate" required />
+      <br />
+      <!-- Tab Navigation -->
+      <div class="tab-container">
+        <button class="tab-button active" id="spectralIndicesTab">Índices Espectrales</button>
+        <button class="tab-button" id="colorCompositesTab">Combinación de Bandas</button>
+      </div>
+
+      <!-- Tab Content -->
+      <div id="espectrales" class="tab-content" style="display: block;">
+        <label for="indexSelect">Seleccione un índice:</label>
+        <select id="indexSelect" class="custom-select">
+          <option value="NDVI">NDVI</option>
+          <option value="GNDVI">GNDVI</option>
+          <option value="EVI">EVI</option>
+          <option value="NDMI">NDMI</option>
+          <option value="SAVI">SAVI</option>
+          <option value="NDSI">NDSI</option>
+          <option value="NDWI">NDWI</option>
+          <option value="NDBI">NDBI</option>
+          <option value="NDCI">NDCI</option>
+          <option value="NDCI">NBR</option>
+        </select>
+        <button id="generateChartButton" class="custom-button">
+          <calcite-icon icon="chart-gear" scale="s"></calcite-icon><span>Generar gráfica / cargar imágenes</span>
+        </button>
+        <calcite-loader label="Creando graficas..." hidden id="chartLoader"></calcite-loader>
+        <canvas id="timeSeriesChart" hidden></canvas>
+      </div>
+
+      <div id="bandas" class="tab-content" style="display: none;">
+        <label for="bandCombination">Seleccione una combinación de bandas:</label>
+        <select id="bandCombination" class="custom-select">
+          <option value="TRUE-COLOR-S2L2A">Color verdadero</option>
+          <option value="FALSE-COLOR">Falso color</option>
+          <option value="BARREN-SOIL">Suerlo arido</option>
+          <option value="URBAN-CLASSIFICATION">Clasificación urbana</option>
+        </select>
+        <button id="getImages" class="custom-button">
+          <calcite-icon icon="color-coded-map" scale="s"></calcite-icon><span>Cargar imágenes</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!--Dialog download polygon ------------------------------------------------------------------------------>
+  <div id="DownloadDialog" class="dialog" style="display: none">
+    <div class="dialog-header" id="DownloadDialogHeader">
+      <h2>Descargas de polygonos</h2>
+      <button id="closeDialogButtonDw" class="close-button">
+        <calcite-icon icon="x-circle" scale="m"></calcite-icon>
+      </button>
+    </div>
+
+    <div class="dialog-content">
+      <label for="startDate">Inicio:</label>
+      <input type="date" id="startDateDw" name="startDateDw" required />
+      <label for="endDate">Final:</label>
+      <input type="date" id="endDateDw" name="endDateDw" required />
+      <br />
+
+      <!-- Tab Navigation -->
+      <div class="tab-container">
+        <button class="tab-button active" id="spectralIndicesTabDW">Índices Espectrales</button>
+      </div>
+
+      <div id="espectralesDW" class="tab-content" style="display: block;">
+        <label for="indexSelect">Seleccione un índice:</label>
+        <select id="indexSelectDw" class="custom-select">
+          <option value="NDVI">NDVI</option>
+          <option value="GNDVI">GNDVI</option>
+          <option value="EVI">EVI</option>
+          <option value="NDMI">NDMI</option>
+          <option value="SAVI">SAVI</option>
+          <option value="NDSI">NDSI</option>
+          <option value="NDWI">NDWI</option>
+          <option value="NDBI">NDBI</option>
+          <option value="NDCI">NDCI</option>
+          <option value="NBR">NBR</option>
+        </select>
+        <button id="downloadButtonDw" class="custom-button">
+          <calcite-icon icon="download" scale="s"></calcite-icon><span>Descargar polygonos</span>
+        </button>
+        <calcite-loader label="generando vectores..." hidden id="chartLoaderDw"></calcite-loader>
+        <canvas id="DownloadChartDw" hidden></canvas>
+      </div>
+    </div> <!-- Cierre del dialog-content -->
+  </div>
+
+  <!-- Dialog HTML for deforestation workflow ------------------------------------------------------------->
+  <div id="DeforestationDialog" class="dialog" style="display: none">
+    <div class="dialog-header" id="DeforestationDialogHeader">
+      <h2>Descargar vectores de cambio</h2>
+      <button id="closeDialogButtonDf" class="close-button">
+        <calcite-icon icon="x-circle" scale="m"></calcite-icon>
+      </button>
+    </div>
+    <div class="dialog-content">
+      <label for="startDate">Inicio:</label>
+      <input type="date" id="startDateDf" name="startDateDf" required />
+      <label for="endDate">Final:</label>
+      <input type="date" id="endDateDf" name="endDateDf" required />
+      <br />
+      <!-- Tab Navigation -->
+      <div id="buttonsDeforestation" class="tab-content" style="display: block;">
+        <button id="downloadButtonDf" class="custom-button">
+          <calcite-icon icon="download" scale="s"></calcite-icon><span>Descargar polygonos</span>
+        </button>
+        <calcite-loader label="generando vectores..." hidden id="chartLoaderDf"></calcite-loader>
+        <canvas id="DownloadChartDf" hidden></canvas>
+      </div>
+    </div>
+  </div>
+
+    <!-- Dialog HTML for search catalog workflow ------------------------------------------------------------->
+  <div id="CatalogDialog" class="dialog" style="display: none">
+    <div class="dialog-header" id="CatalogDialogHeader">
+      <h2>Consultar catalogo BYOC</h2>
+      <button id="closeDialogButtonCs" class="close-button">
+        <calcite-icon icon="x-circle" scale="m"></calcite-icon>
+      </button>
+    </div>
+    <div class="dialog-content">
+      <label for="startDate">Inicio:</label>
+      <input type="date" id="startDateCs" name="startDateCs" required />
+      <label for="endDate">Final:</label>
+      <input type="date" id="endDateCs" name="endDateCs" required />
+      <br />
+      <!-- Tab Navigation 
+      <div id="buttonsCatalog" class="tab-content" style="display: block;">
+        <label for="indexSelect">Implementacion:</label>
+        <select id="indexSelectCs" class="custom-select">
+          <option value="UE">UE</option>
+          <option value="CREO">CREO</option>
+          <option value="US-WEST">US-WEST</option>
+          <option value="GCP-US-CENTRAL">GCP-US-CENTRAL</option>
+        </select>
+
+        <div style="margin-top: 10px;">
+          <label for="userValueInputCs">Identificador BYOC:</label>
+          <input type="text" id="userValueInputCs" name="userValueInput" class="custom-input" placeholder="Ingrese un identificador"/>
+        </div>
+-->
+        
+
+        <button id="downloadButtonCs" class="custom-button">
+          <calcite-icon icon="download" scale="s"></calcite-icon><span>Consultar</span>
+        </button>
+
+        <div id="resultsContainer" 
+            style="margin-top: 10px;
+                  max-height: 300px;
+                  overflow-y: auto;
+                  border: 1px solid #dcdcdc;
+                  border-radius: 6px;
+                  padding: 8px;
+                  background: #f9f9f9;
+                  font-size: 13px;">
+        <p style="color: #777; font-style: italic;">Los resultados del catálogo aparecerán aquí...</p>
+        </div>
+
+        <calcite-loader label="generando vectores..." hidden id="chartLoaderCs"></calcite-loader>
+        <canvas id="DownloadChartCs" hidden></canvas>
+      </div>
+    </div>
+  </div>
+
+
+   <!-- Dialog HTML for identificacion burns zones ------------------------------------------------------------->
+  <div id="BurnsDialog" class="dialog" style="display: none">
+    <div class="dialog-header" id="BurnsDialogHeader">
+      <h2>Descargar vectores zonas de quema</h2>
+      <button id="closeDialogButtonBs" class="close-button">
+        <calcite-icon icon="x-circle" scale="m"></calcite-icon>
+      </button>
+    </div>
+    <div class="dialog-content" style="text-align: center; margin-top: 10px;">
+      <label for="startDate">Inicio:</label>
+      <input type="date" id="startDateBs" name="startDateBs" required />
+      <label for="endDate">Final:</label>
+      <input type="date" id="endDateBs" name="endDateBs" required />
+      <br />
+
+      <label for="burnsThreshold">(%) Nubosidad admitida:</label>
+      <input type="range" id="burnsThreshold" name="burnsThreshold" min="0" max="100" value="50" />
+      <span id="burnsThresholdValue">50</span>%
+
+
+      <label for="burnsThresholdInput" >Index umbral:</label>
+      <input type="number" id="burnsThresholdInput" name="burnsThresholdInput" min="0.1" max="0.22" step="0.01" value="0.10" style="width: 60px;" />
+      <br />
+
+      <div style="margin-bottom: 10px; font-size: 14px; color: #444; line-height: 1.4; text-align: center">
+      <span style=" font-weight: bold;">Valores index umbral</span><br>
+      <p>Valores cercanos a 0.1 deben ser utilizados en áreas urbanas o aledañas a estas.</p>
+      <p>Valores cercanos a 0.15 deben ser empleados en zonas cercanas a cuerpos hídricos loticos.</p>
+      <p>Valores cercanos a 0.2 deben ser empleados en zonas con alta presencia histórica de quemas, asociado a mantenimiento de cultivos y/o perdida de cobertura vegetal.</p>
+      </div>
+
+
+
+      <!-- Tab Navigation -->
+      <div id="buttonsBurns" class="tab-content" style="display: block;">
+        <button id="downloadButtonBs" class="custom-button">
+          <calcite-icon icon="download" scale="s"></calcite-icon><span>Descargar / visualizar polygonos de quema</span>
+        </button>
+        <calcite-loader label="generando vectores..." hidden id="chartLoaderBs"></calcite-loader>
+        <canvas id="DownloadChartBs" hidden></canvas>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Dialog HTML for Planet analytics workflow ---------------------------------------------------------->
+  <div id="analyticsDialog" class="dialog" style="display: none">
+    <div class="dialog-header" id="analytycsDialogHeader">
+      <h2>Planet analytics Detección</h2>
+      <button id="closeDialogButtonPL" class="close-button">
+        <calcite-icon icon="x-circle" scale="m"></calcite-icon>
+      </button>
+    </div>
+    <div class="dialog-content">
+      <p>
+        Las subscripciones disponibles en su cuenta se listan a continuación
+      </p>
+      <select id="subscriptionsSelect" class="custom-select"></select>
+      <button id="queryCollectionsButton" class="custom-button" style="margin-top: 10px">
+        Obtener resultados
+      </button>
+      <div id="resultsMessage" style="margin-top: 10px; font-size: 14px"></div>
+      <button id="zoomToButton" class="custom-button" style="display: none; margin-top: 10px">
+        <calcite-icon icon="search" scale="s"></calcite-icon> ZoomTo
+      </button>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+
+</html>
