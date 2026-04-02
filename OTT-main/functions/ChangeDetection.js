@@ -13,6 +13,93 @@ define([
   PlanetAPIKey,
   miscellaneous
 ) {
+  function normalizeDateValue(value) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      // Normalize timestamps in seconds/milliseconds/microseconds/nanoseconds to milliseconds.
+      if (value > 1e14) {
+        return new Date(Math.floor(value / 1e6));
+      }
+
+      if (value > 1e11) {
+        return new Date(value);
+      }
+
+      if (value > 1e9) {
+        return new Date(value * 1000);
+      }
+    }
+
+    if (typeof value === "string") {
+      const yyyyMmDdMatch = value.match(/(\d{4})-(\d{2})-(\d{2})/);
+
+      if (yyyyMmDdMatch) {
+        return new Date(
+          Date.UTC(
+            Number(yyyyMmDdMatch[1]),
+            Number(yyyyMmDdMatch[2]) - 1,
+            Number(yyyyMmDdMatch[3])
+          )
+        );
+      }
+
+      const yyyyMmMatch = value.match(/(\d{4})-(\d{2})/);
+
+      if (yyyyMmMatch) {
+        return new Date(
+          Date.UTC(Number(yyyyMmMatch[1]), Number(yyyyMmMatch[2]) - 1, 1)
+        );
+      }
+
+      const parsedDate = new Date(value);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        return parsedDate;
+      }
+    }
+
+    return null;
+  }
+
+  function getObservedDateFromFeature(feature) {
+    const properties = feature?.properties || {};
+    const candidateDates = [
+      properties.observed,
+      properties.date,
+      properties.observed_at,
+      properties.observation_date,
+      properties.published,
+    ];
+
+    for (const value of candidateDates) {
+      if (!value) {
+        continue;
+      }
+
+      const parsedDate = normalizeDateValue(value);
+
+      if (parsedDate && !Number.isNaN(parsedDate.getTime())) {
+        return parsedDate;
+      }
+    }
+
+    if (typeof properties.source_mosaic_name === "string") {
+      const sourceMosaicMatch = properties.source_mosaic_name.match(
+        /(\d{4})[_-](\d{2})/
+      );
+
+      if (sourceMosaicMatch) {
+        const parsedDate = new Date(
+          Date.UTC(Number(sourceMosaicMatch[1]), Number(sourceMosaicMatch[2]) - 1, 1)
+        );
+
+        if (!Number.isNaN(parsedDate.getTime())) {
+          return parsedDate;
+        }
+      }
+    }
+
+    return null;
+  }
+
   async function getSubscriptionsData(map, view) {
     const dialog = document.getElementById("analyticsDialog");
     const dialogHeader = document.getElementById("analytycsDialogHeader");
@@ -39,6 +126,41 @@ define([
         selectElement.appendChild(option);
       });
 
+      const periodSelectElement = document.getElementById("observedPeriodSelect");
+      periodSelectElement.innerHTML =
+        '<option value="all">Todos los períodos</option>';
+      const startYear = 2021;
+      const startMonth = 1;
+      const endYear = 2026;
+      const endMonth = 2;
+      const monthNames = [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+      ];
+
+      for (let year = endYear; year >= startYear; year--) {
+        const maxMonth = year === endYear ? endMonth : 12;
+        const minMonth = year === startYear ? startMonth : 1;
+
+        for (let month = maxMonth; month >= minMonth; month--) {
+          const periodOption = document.createElement("option");
+          const periodValue = `${year}-${String(month).padStart(2, "0")}`;
+          periodOption.value = periodValue;
+          periodOption.textContent = `${monthNames[month - 1]} ${year}`;
+          periodSelectElement.appendChild(periodOption);
+        }
+      }
+
       // Display the dialog
       dialog.style.display = "block";
       miscellaneous.makeDialogDraggable(dialog, dialogHeader);
@@ -55,17 +177,104 @@ define([
       .getElementById("queryCollectionsButton")
       .addEventListener("click", async () => {
         const selectElement = document.getElementById("subscriptionsSelect");
+        const periodSelectElement = document.getElementById("observedPeriodSelect");
+        const queryCollectionsButton = document.getElementById(
+          "queryCollectionsButton"
+        );
         const subscription_id = selectElement.value;
         const subscription_name =
           selectElement.options[selectElement.selectedIndex].text;
+        const selectedPeriod = periodSelectElement.value;
+        const requestId = `analytics-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}`;
+
+        const monthNames = {
+          1: "enero",
+          2: "febrero",
+          3: "marzo",
+          4: "abril",
+          5: "mayo",
+          6: "junio",
+          7: "julio",
+          8: "agosto",
+          9: "septiembre",
+          10: "octubre",
+          11: "noviembre",
+          12: "diciembre",
+        };
+        let progressPoller = null;
 
         try {
+          queryCollectionsButton.disabled = true;
+          queryCollectionsButton.textContent = "Consultando resultados...";
+          resultsMessage.textContent =
+            "Consultando Planet Analytics, este proceso puede tardar unos minutos...";
+          zoomToButton.style.display = "none";
+
+          progressPoller = setInterval(async () => {
+            try {
+              const progressResponse = await fetch(
+                `http://localhost:3000/get-analytics-progress?request_id=${requestId}`
+              );
+
+              if (!progressResponse.ok) {
+                return;
+              }
+
+              const progressData = await progressResponse.json();
+
+              if (progressData.status === "running") {
+                resultsMessage.textContent = `Procesando páginas: ${progressData.pagesProcessed}. Detecciones acumuladas: ${progressData.featuresProcessed}.`;
+              }
+            } catch (pollError) {
+              console.warn("Unable to poll analytics progress:", pollError);
+            }
+          }, 2000);
+
+          const requestController = new AbortController();
+          const timeoutId = setTimeout(() => {
+            requestController.abort();
+          }, 600000);
+
           const response = await fetch(
-            `http://localhost:3000/get-analytics-results?subscription_id=${subscription_id}`
+            `http://localhost:3000/get-analytics-results?subscription_id=${subscription_id}&request_id=${requestId}`,
+            { signal: requestController.signal }
           );
+          clearTimeout(timeoutId);
+          clearInterval(progressPoller);
+
+          if (!response.ok) {
+            throw new Error(`Error de consulta: ${response.status}`);
+          }
+
           const geojson = await response.json();
+
+          const filteredFeatures = geojson.features.filter((feature) => {
+            const observedDate = getObservedDateFromFeature(feature);
+
+            if (!observedDate) {
+              return false;
+            }
+
+            if (selectedPeriod === "all") {
+              return true;
+            }
+
+            const observedPeriod = `${observedDate.getUTCFullYear()}-${String(
+              observedDate.getUTCMonth() + 1
+            ).padStart(2, "0")}`;
+
+            return observedPeriod === selectedPeriod;
+          });
+
+          const filteredGeojson = {
+            ...geojson,
+            features: filteredFeatures,
+          };
+
           // create a new blob from geojson featurecollection
-          const blob = new Blob([JSON.stringify(geojson)], {
+          const blob = new Blob([JSON.stringify(filteredGeojson)], {
             type: "application/json",
           });
 
@@ -77,13 +286,16 @@ define([
             const observed_date = new Date(
               view.popup.selectedFeature.attributes.observed
             );
+            const basemapOffsetMonths = Number(
+              document.getElementById("basemapOffsetSelect").value
+            );
             const year = observed_date.getFullYear();
             const month = String(observed_date.getMonth() + 1).padStart(2, "0"); // two digits month
             const detectionBasemapId = `global_monthly_${year}_${month}_mosaic`;
 
-            // Calculate past date (6 months prior)
+            // Calculate past date (selected months prior)
             const pastDate = new Date(observed_date);
-            pastDate.setMonth(pastDate.getMonth() - 6);
+            pastDate.setMonth(pastDate.getMonth() - basemapOffsetMonths);
 
             const pastYear = pastDate.getFullYear();
             const pastMonth = String(pastDate.getMonth() + 1).padStart(2, "0"); // two digits month
@@ -174,10 +386,16 @@ define([
           );
 
           // Display the number of features in the resultsMessage
-          const featureCount = geojson.features.length;
-          resultsMessage.textContent = `${featureCount} detecciones fueron añadidas al mapa`;
-          // Show the ZoomTo button
-          zoomToButton.style.display = "inline-block";
+          const featureCount = filteredFeatures.length;
+          const periodMessage =
+            selectedPeriod === "all"
+              ? "todos los períodos"
+              : `${monthNames[Number(selectedPeriod.split("-")[1])]} de ${selectedPeriod.split("-")[0]}`;
+
+          resultsMessage.textContent = `${featureCount} detecciones fueron añadidas al mapa para ${periodMessage}. Total recibido: ${geojson.features.length}`;
+
+          // Show the ZoomTo button only if features are available
+          zoomToButton.style.display = featureCount > 0 ? "inline-block" : "none";
 
           document
             .getElementById("zoomToButton")
@@ -193,7 +411,25 @@ define([
               }
             });
         } catch (error) {
+          if (progressPoller) {
+            clearInterval(progressPoller);
+          }
+
+          if (error.name === "AbortError") {
+            resultsMessage.textContent =
+              "La consulta tardó demasiado. Intente de nuevo con un filtro de mes/año más específico.";
+          } else {
+            resultsMessage.textContent =
+              "No fue posible obtener resultados de Planet Analytics. Revise el proxy y vuelva a intentar.";
+          }
           console.error("Error fetching collections:", error);
+        } finally {
+          if (progressPoller) {
+            clearInterval(progressPoller);
+          }
+
+          queryCollectionsButton.disabled = false;
+          queryCollectionsButton.textContent = "Obtener resultados";
         }
       });
   }
