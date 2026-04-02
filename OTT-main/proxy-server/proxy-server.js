@@ -7,6 +7,72 @@ const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const PL_API_KEY = process.env.PL_API_KEY;
+const ANALYTICS_ITEMS_PAGE_LIMIT = 1000;
+const ANALYTICS_MAX_RETRIES = 5;
+const ANALYTICS_BASE_RETRY_DELAY_MS = 1200;
+const analyticsProgressStore = new Map();
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getRetryDelayMs = (response, attempt) => {
+  const retryAfterHeader = response.headers.get("retry-after");
+
+  if (retryAfterHeader) {
+    const retryAfterSeconds = Number(retryAfterHeader);
+    if (Number.isFinite(retryAfterSeconds)) {
+      return retryAfterSeconds * 1000;
+    }
+  }
+
+  return ANALYTICS_BASE_RETRY_DELAY_MS * 2 ** attempt;
+};
+
+const fetchPlanetAnalyticsPage = async (url) => {
+  for (let attempt = 0; attempt <= ANALYTICS_MAX_RETRIES; attempt++) {
+    const planetResponse = await fetch(url, {
+      headers: {
+        Authorization: `api-key ${PL_API_KEY}`,
+      },
+    });
+
+    if (planetResponse.ok) {
+      return planetResponse;
+    }
+
+    if (planetResponse.status === 429 && attempt < ANALYTICS_MAX_RETRIES) {
+      const retryDelayMs = getRetryDelayMs(planetResponse, attempt);
+      await sleep(retryDelayMs);
+      continue;
+    }
+
+    throw new Error(
+      `Failed to fetch data from Planet API: ${planetResponse.status} ${planetResponse.statusText}`
+    );
+  }
+
+  throw new Error("Failed to fetch data from Planet API after retries");
+};
+
+const getAnalyticsNextLink = (pageData) => {
+  const linksArray = Array.isArray(pageData?.links)
+    ? pageData.links
+    : Array.isArray(pageData?._links)
+    ? pageData._links
+    : [];
+
+  const nextLinkObject = linksArray.find((link) => {
+    return link?.rel === "next" && typeof link?.href === "string";
+  });
+
+  return (
+    pageData?._links?._next ||
+    pageData?._links?.next ||
+    pageData?.links?.next ||
+    nextLinkObject?.href ||
+    pageData?.next ||
+    null
+  );
+};
 
 if (!CLIENT_ID || !CLIENT_SECRET || !PL_API_KEY) {
   console.error(
@@ -237,6 +303,29 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "Failed to fetch Planet API data" }));
     }
   } else if (
+    req.url.startsWith("/get-analytics-progress") &&
+    req.method === "GET"
+  ) {
+    const queryObject = parse(req.url, true).query;
+    const request_id = queryObject.request_id;
+
+    if (!request_id) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing request_id parameter" }));
+      return;
+    }
+
+    const progressData = analyticsProgressStore.get(request_id);
+
+    if (!progressData) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Progress not found" }));
+      return;
+    }
+
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(progressData));
+  } else if (
     req.url.startsWith("/get-analytics-results") &&
     req.method === "GET"
   ) {
@@ -245,34 +334,82 @@ const server = createServer(async (req, res) => {
 
     // Extract the subscription_id from the query parameters
     const subscription_id = queryObject.subscription_id;
+    const request_id = queryObject.request_id;
 
-    if (!subscription_id) {
+    if (!subscription_id || !request_id) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing subscription_id parameter" }));
+      res.end(
+        JSON.stringify({ error: "Missing subscription_id or request_id parameter" })
+      );
       return;
     }
 
-    try {
-      const planetResponse = await fetch(
-        `https://api.planet.com/analytics/collections/${subscription_id}/items?limit=10`,
-        {
-          headers: {
-            Authorization: `api-key ${PL_API_KEY}`,
-          },
-        }
-      );
+    analyticsProgressStore.set(request_id, {
+      status: "running",
+      pagesProcessed: 0,
+      featuresProcessed: 0,
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
 
-      if (!planetResponse.ok) {
-        throw new Error(
-          `Failed to fetch data from Planet API: ${planetResponse.statusText}`
-        );
+    try {
+      // Keep page size conservative so pagination links are returned consistently.
+      let nextUrl = `https://api.planet.com/analytics/collections/${subscription_id}/items?limit=${ANALYTICS_ITEMS_PAGE_LIMIT}`;
+      const features = [];
+      let firstPageData = null;
+      let pagesProcessed = 0;
+
+      while (nextUrl) {
+        const planetResponse = await fetchPlanetAnalyticsPage(nextUrl);
+
+        const pageData = await planetResponse.json();
+
+        if (!firstPageData) {
+          firstPageData = pageData;
+        }
+
+        if (Array.isArray(pageData.features)) {
+          features.push(...pageData.features);
+        }
+        pagesProcessed += 1;
+
+        analyticsProgressStore.set(request_id, {
+          status: "running",
+          pagesProcessed,
+          featuresProcessed: features.length,
+          startedAt:
+            analyticsProgressStore.get(request_id)?.startedAt ||
+            new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+
+        nextUrl = getAnalyticsNextLink(pageData);
       }
 
-      const planetData = await planetResponse.json();
+      const planetData = {
+        ...(firstPageData || {}),
+        features,
+      };
+
+      analyticsProgressStore.set(request_id, {
+        status: "completed",
+        pagesProcessed,
+        featuresProcessed: features.length,
+        startedAt:
+          analyticsProgressStore.get(request_id)?.startedAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify(planetData));
     } catch (error) {
       console.error("Error fetching Planet API data:", error);
+      analyticsProgressStore.set(request_id, {
+        ...(analyticsProgressStore.get(request_id) || {}),
+        status: "error",
+        error: String(error),
+        updatedAt: new Date().toISOString(),
+      });
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Failed to fetch Planet API data" }));
     }
