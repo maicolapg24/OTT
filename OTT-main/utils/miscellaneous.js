@@ -247,7 +247,7 @@ define([
     type: "simple-fill",
     color: [0, 0, 0, 0], // No fill
     outline: {
-      color: "black",
+      color: [255, 0, 150, 1],
       width: 2,
     },
   };
