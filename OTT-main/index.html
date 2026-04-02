@@ -333,6 +333,20 @@
         Las subscripciones disponibles en su cuenta se listan a continuación
       </p>
       <select id="subscriptionsSelect" class="custom-select"></select>
+      <label for="observedPeriodSelect" style="display: block; margin-top: 10px; font-size: 14px">
+        Período observado del cambio (mes-año)
+      </label>
+      <select id="observedPeriodSelect" class="custom-select">
+        <option value="all">Todos los períodos</option>
+      </select>
+      <label for="basemapOffsetSelect" style="display: block; margin-top: 10px; font-size: 14px">
+        Temporalidad del mosaico de comparación
+      </label>
+      <select id="basemapOffsetSelect" class="custom-select">
+        <option value="3">3 meses</option>
+        <option value="6" selected>6 meses</option>
+        <option value="12">12 meses</option>
+      </select>
       <button id="queryCollectionsButton" class="custom-button" style="margin-top: 10px">
         Obtener resultados
       </button>
