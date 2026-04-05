@@ -6,7 +6,7 @@ define([
 ], function (Map, MapView, LayerList, Legend) {
   function createMap() {
     const map = new Map({
-      basemap: "streets-navigation-vector",
+      basemap: "hybrid",
     });
 
     const view = new MapView({
