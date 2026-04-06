@@ -1,7 +1,7 @@
 define([
     "esri/TimeExtent",
     "../utils/miscellaneous.js",
-    "./utils/EvalscriptCatalogDw.js",
+    "../utils/EvalscriptCatalogDw.js",
     "https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.1/proj4.js"
 
   
@@ -22,22 +22,24 @@ define([
             downloadButtonCs.disabled = true;
             const loader = document.getElementById("chartLoaderCs");
             loader.hidden = false;
+            const resultsContainer = document.getElementById("resultsContainer")
 
-            // define interest parameters
-            const startDate = document.getElementById("startDateCs").value;
-            const endDate = document.getElementById("endDateCs").value;
-            const evalScript = EvalscriptCatalogDw["ECSDW"];
-            const evalScript1 = EvalscriptCatalogDw["ECSDW1"];
+            try {
+                // define interest parameters
+                const startDate = document.getElementById("startDateCs").value;
+                const endDate = document.getElementById("endDateCs").value;
+                const evalScript = EvalscriptCatalogDw["ECSDW"];
+                const evalScript1 = EvalscriptCatalogDw["ECSDW1"];
 
         
             // validate date range
-            const isDateRangeValid = miscellaneous.validateDateRange(
-                startDate,
-                endDate
-              );
-              if (!isDateRangeValid) {
-                return;
-              }
+                const isDateRangeValid = miscellaneous.validateDateRange(
+                    startDate,
+                    endDate
+                );
+                if (!isDateRangeValid) {
+                    return;
+                }
               
             var collection = "byoc-7c1511e7-42fd-41ee-925a-bedb3c24cc44"
 
@@ -67,17 +69,16 @@ define([
 
             //create request to obtain the index image
             
-            fetch("http://localhost:3000/get-catalog", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(data),
-            })
-            .then(async (response) => {
-                if (!response.ok) {
+            const response = await fetch("http://localhost:3000/get-catalog", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(data),
+            });
+            if (!response.ok) {
                 throw new Error(`Error fetching image: ${response.status}`);
-                }
+            }
 
                 const result = await response.json();
                 //console.log(result.features);
@@ -165,7 +166,7 @@ define([
         
                                 // hide the loader and activate the download button
                                 loader.hidden = true;
-                                downloadButtonDw.disabled = false;
+                                downloadButtonCs.disabled = false;
                             })
                             .catch((error) => {
                                 console.error("Error al procesar la imagen:", error);
@@ -241,7 +242,7 @@ define([
 
                         // hide the loader and activate the download button
                         loader.hidden = true;
-                        downloadButtonDw.disabled = false;
+                        downloadButtonCs.disabled = false;
                     })
                     .catch((error) => {
                         console.error("Error al procesar la imagen:", error);
@@ -252,14 +253,15 @@ define([
             } else {
                 resultsContainer.innerHTML = "<p>No se encontraron resultados.</p>";
             }
+            
+            } catch (error) {
+                console.error("Error al procesar la imagen:", error);
+            } finally {
                 
                 // hide the loader and activate the download button
                 loader.hidden = true;
-                downloadButtonCs.disabled = false; 
-            })
-            .catch((error) => {
-                console.error("Error al procesar la imagen:", error);
-            });
+                    downloadButtonCs.disabled = false;
+            }
 
         });
         
