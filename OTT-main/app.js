@@ -98,7 +98,7 @@ require([
   );
 
   mapDeforestationButton.addEventListener("click", async () =>
-    MapDeforestation.processImage(map, aoiGeometry)
+    MapDeforestation.processImage(view, aoiGeometry)
   );
 
   timeSeriesButton.addEventListener("click", () =>
@@ -121,3 +121,4 @@ require([
     SearchCatalog.SearchCatalog(view, aoiGeometry)
   });
 });
+
