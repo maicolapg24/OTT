@@ -40,23 +40,24 @@ define([
       const loader = document.getElementById("chartLoaderBs");
       loader.hidden = false;
 
-      const startDate = document.getElementById("startDateBs").value;
-      const endDate = document.getElementById("endDateBs").value;
-      const indiceValue = parseFloat(indexInput.value);
+      try {
+        const startDate = document.getElementById("startDateBs").value;
+        const endDate = document.getElementById("endDateBs").value;
+        const indiceValue = parseFloat(indexInput.value);
 
-      const evalScriptBurn = evalscript_Burns["NBR"].replace(/{{THRESHOLD}}/g, indiceValue.toFixed(2));
-      const evalScriptImage = evalscript_Burns["NBR2"].replace(/{{THRESHOLD}}/g, indiceValue.toFixed(2));
-      const threshold = parseFloat(slider.value);
-      
-      const isDateRangeValid = miscellaneous.validateDateRange(
-        startDate,
-        endDate
-      );
-      if (!isDateRangeValid) {
-        return;
-      }
+        const evalScriptBurn = evalscript_Burns["NBR"].replace(/{{THRESHOLD}}/g, indiceValue.toFixed(2));
+        const evalScriptImage = evalscript_Burns["NBR2"].replace(/{{THRESHOLD}}/g, indiceValue.toFixed(2));
+        const threshold = parseFloat(slider.value);
+        
+        const isDateRangeValid = miscellaneous.validateDateRange(
+          startDate,
+          endDate
+        );
+        if (!isDateRangeValid) {
+          return;
+        }
 
-      const bodyburn = JSON.stringify({
+        const bodyburn = JSON.stringify({
         input: {
           bounds: {
             geometry: {
@@ -138,67 +139,56 @@ define([
         evalscript: evalScriptImage,
       });
 
-      fetch("http://localhost:3000/get-image", {
+      const burnResponsePromise = fetch("http://localhost:3000/get-image", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: bodyburn,
-      })
-        .then(async (response) => {
-  
-          if (!response.ok)
-            throw new Error(`Error fetching image: ${response.status}`);
-
-          var classimage = await miscellaneous.DownloadBurns(response)
-
-          await miscellaneous.addGeojsonLayer(view,classimage);
-  
-          // create blob file from the geojson
-          const blob = new Blob([JSON.stringify(classimage)], { type: "application/json" });
-          const url = URL.createObjectURL(blob);
-
-          // create a link to download the file
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "VectoresQuema.geojson"; //file download name
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-      
-          // release the blob file url
-          URL.revokeObjectURL(url);
-  
-          // hide the loader and activate the download button
-          loader.hidden = true;
-          downloadButtonBs.disabled = false;
-        })
-        .catch((error) => {
-          console.error("Error al procesar la imagen:", error);
       });
 
 
-      fetch("http://localhost:3000/get-image", {
+      const imageResponsePromise = fetch("http://localhost:3000/get-image", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: bodyImage,
-      })
-        .then(async (response) => {
-  
-          if (!response.ok)
-            throw new Error(`Error fetching image: ${response.status}`);
+     });
 
-          await miscellaneous.addMediaLayer(view,response, aoiGeometry)
-  
-          // hide the loader and activate the download button
-          loader.hidden = true;
-          downloadButtonBs.disabled = false;
-        })
-        .catch((error) => {
-          console.error("Error al procesar la imagen:", error);
-      });
+      const burnResponse = await burnResponsePromise;
+      if (!burnResponse.ok)
+        throw new Error(`Error fetching image: ${burnResponse.status}`);
+
+      var classimage = await miscellaneous.DownloadBurns(burnResponse)
+      await miscellaneous.addGeojsonLayer(view,classimage);
+
+      // create blob file from the geojson
+      const blob = new Blob([JSON.stringify(classimage)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      // create a link to download the file
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "VectoresQuema.geojson"; //file download name
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // release the blob file url
+      URL.revokeObjectURL(url);
+
+      const imageResponse = await imageResponsePromise;
+      if (!imageResponse.ok)
+        throw new Error(`Error fetching image: ${imageResponse.status}`);
+      await miscellaneous.addMediaLayer(view,imageResponse, aoiGeometry)
+
+      } catch (error) {
+        console.error("Error al procesar la imagen:", error);
+      } finally {
+        loader.hidden = true;
+        downloadButtonBs.disabled = false;
+      }
 
     });
     
@@ -213,5 +203,3 @@ define([
   
   return { processImage };
 });
-
-
