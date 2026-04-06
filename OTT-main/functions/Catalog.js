@@ -26,28 +26,20 @@ define([
 
             try {
                 // define interest parameters
-                const startDate = document.getElementById("startDateCs").value;
-                const endDate = document.getElementById("endDateCs").value;
+                const selectedYears = Array.from(
+                    document.querySelectorAll('input[name="catalogYear"]:checked')
+                ).map((checkbox) => checkbox.value);
                 const evalScript = EvalscriptCatalogDw["ECSDW"];
                 const evalScript1 = EvalscriptCatalogDw["ECSDW1"];
 
         
-            // validate date range
-                const isDateRangeValid = miscellaneous.validateDateRange(
-                    startDate,
-                    endDate
-                );
-                if (!isDateRangeValid) {
+            if (selectedYears.length === 0) {
+                    resultsContainer.innerHTML =
+                        "<p>Seleccione al menos un año (2023, 2024 o 2025).</p>";
                     return;
                 }
               
             var collection = "byoc-7c1511e7-42fd-41ee-925a-bedb3c24cc44"
-
-            // define the body request 
-            const timeRange = {
-                from: `${startDate}T00:00:00Z`,
-                to: `${endDate}T23:59:59Z`
-            };
 
             const coords4326 = [
                 aoiGeometry[0].map((c) => {
@@ -56,51 +48,60 @@ define([
                 }),
             ];
 
-            const data = {
-                collections: [collection],
-                datetime: `${timeRange.from}/${timeRange.to}`,
-                intersects: {
-                    type: "Polygon",
-                    coordinates: coords4326
-                },
-                limit: 50,
+            const catalogResponses = await Promise.all(
+                selectedYears.map(async (year) => {
+                    const data = {
+                        collections: [collection],
+                        datetime: `${year}-01-01T00:00:00Z/${year}-12-31T23:59:59Z`,
+                        intersects: {
+                            type: "Polygon",
+                            coordinates: coords4326
+                        },
+                        limit: 50,
+                    };
 
-            };
+                    const response = await fetch("http://localhost:3000/get-catalog", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(data),
+                    });
 
-            //create request to obtain the index image
-            
-            const response = await fetch("http://localhost:3000/get-catalog", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(data),
-            });
-            if (!response.ok) {
-                throw new Error(`Error fetching image: ${response.status}`);
-            }
+                    if (!response.ok) {
+                        throw new Error(`Error fetching image: ${response.status}`);
+                    }
 
-                const result = await response.json();
-                //console.log(result.features);
+                    return response.json();
+                })
+            );
+
+                const allFeatures = catalogResponses.flatMap((catalogResult) => catalogResult.features || []);
+                const uniqueFeatures = Array.from(
+                    new Map(
+                        allFeatures.map((feature) => [
+                            `${feature.id || ""}_${feature.properties?.datetime || ""}`,
+                            feature
+                        ])
+                    ).values()
+                );
 
                 resultsContainer.innerHTML = "";
 
 
-                if (result.features && result.features.length > 0) {
-                result.features.forEach((feature, index) => {
+                if (uniqueFeatures.length > 0) {
+                uniqueFeatures.forEach((feature, index) => {
                 const id = feature.id || "Sin ID";
                 const date = feature.properties?.datetime || "Sin fecha";
-                const collection = feature.collection || "Desconocida";
+                const dateOnly = date !== "Sin fecha" ? date.split("T")[0] : date;
 
                 const itemDiv = document.createElement("div");
                 itemDiv.classList.add("feature-item");
                 itemDiv.innerHTML = `
                     <div style="background:#f8f8f8;padding:10px;margin-bottom:8px;border-radius:8px;">
-                    <p><strong>${index + 1}. ID:</strong> ${id}</p>
-                    <p><strong>Fecha:</strong> ${date}</p>
-                    <p><strong>Colección:</strong> ${collection}</p>
-                    <button class="downloadFeature" data-id="${id}" data-date="${date}" data-collection="${collection}">Descargar</button>
-                    <button class="visualizeFeature" data-id="${id}" data-date="${date}" data-collection="${collection}">Visualizar</button>
+                    <p><strong>${index + 1}. Fecha:</strong> ${dateOnly}</p>
+                    <button class="downloadFeature" data-id="${id}" data-date="${date}">Descargar</button>
+                    <button class="visualizeFeature" data-id="${id}" data-date="${date}">Visualizar</button>
                     </div>
                 `;
                 resultsContainer.appendChild(itemDiv);
@@ -162,7 +163,7 @@ define([
                                 if (!response.ok) {
                                 throw new Error(`Error fetching image: ${response.status}`);
                                 }
-                                await miscellaneous.addMediaLayer(view,response, aoiGeometry)
+                                await miscellaneous.addMediaLayer(view, response, aoiGeometry, `Imagen ${featureDate.split("T")[0]}`)
         
                                 // hide the loader and activate the download button
                                 loader.hidden = true;
