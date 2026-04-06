@@ -230,10 +230,12 @@
       </button>
     </div>
     <div class="dialog-content">
-      <label for="startDate">Inicio:</label>
-      <input type="date" id="startDateCs" name="startDateCs" required />
-      <label for="endDate">Final:</label>
-      <input type="date" id="endDateCs" name="endDateCs" required />
+      <label>Año(s) de imagen:</label>
+      <div id="catalogYearOptions" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+        <label><input type="checkbox" name="catalogYear" value="2023" /> 2023</label>
+        <label><input type="checkbox" name="catalogYear" value="2024" /> 2024</label>
+        <label><input type="checkbox" name="catalogYear" value="2025" /> 2025</label>
+      </div>
       <br />
       <!-- Tab Navigation 
       <div id="buttonsCatalog" class="tab-content" style="display: block;">
@@ -359,4 +361,5 @@
   <script src="app.js"></script>
 </body>
 
+</html>
 </html>
