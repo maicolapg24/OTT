@@ -183,7 +183,7 @@ define([
     const mediaLayer = new MediaLayer({
       source: imageElement,
       opacity:0.9,
-      title: "Imagen PNG",
+      title: layerTitle,
       blendMode:"normal",
     })
 
