@@ -192,7 +192,7 @@ define([
     
   }
 
-  async function addGeojsonLayer(view,classimage){
+  async function addGeojsonLayer(view,classimage, layerTitle = "Zonas Quemadas"){
 
     const blob = new Blob([JSON.stringify(classimage)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -224,7 +224,7 @@ define([
        
     const geojsonLayer = new GeoJSONLayer({
       url: url,
-      title: "Zonas Quemadas",
+      title: layerTitle,
       popupTemplate: template,
       renderer: renderer
     });
@@ -808,4 +808,3 @@ async function DownloadBurns(image) {
     DownloadBurns
   };
 });
-
