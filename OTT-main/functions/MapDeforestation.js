@@ -1,13 +1,47 @@
 define([
-  "esri/geometry/Extent",
-  "esri/layers/support/ImageElement",
-  "esri/layers/support/ExtentAndRotationGeoreference",
-  "esri/layers/MediaLayer",
+  "esri/layers/WMTSLayer",
+  "../PL_API_KEY.js",
   "../utils/miscellaneous.js",
   "../utils/evalScript_deforestation.js",
-], function ( Extent, ImageElement, ExtentAndRotationGeoreference, MediaLayer, miscellaneous, evalScript_deforestation
+], function (WMTSLayer, PlanetAPIKey, miscellaneous, evalScript_deforestation
 ) {
-  function processImage(map, aoiGeometry) {
+  function buildPlanetMosaicId(dateString, monthOffset = 0) {
+    const baseDate = new Date(`${dateString}T00:00:00Z`);
+
+    if (Number.isNaN(baseDate.getTime())) {
+      return null;
+    }
+
+    baseDate.setUTCDate(1);
+    baseDate.setUTCMonth(baseDate.getUTCMonth() + monthOffset);
+
+    const year = baseDate.getUTCFullYear();
+    const month = String(baseDate.getUTCMonth() + 1).padStart(2, "0");
+
+    return `global_monthly_${year}_${month}_mosaic`;
+  }
+
+  function addPlanetMosaicLayer(map, mosaicId, title) {
+    const planetApiKey = PlanetAPIKey.myExtraSecretAPIKey;
+    const customParameters = {
+      api_key: planetApiKey,
+    };
+
+    const wmtsLayer = new WMTSLayer({
+      url: "https://api.planet.com/basemaps/v1/mosaics/wmts?",
+      activeLayer: {
+        id: mosaicId,
+      },
+      customParameters: customParameters,
+      title: title,
+      visible: true,
+      opacity: 0.9,
+    });
+
+    map.add(wmtsLayer, 0);
+  }
+
+  function processImage(view, aoiGeometry) {
 
     // show the loader and Inactivate the download button
     const dialog = document.getElementById("DeforestationDialog");
@@ -16,8 +50,8 @@ define([
     dialog.style.display = "block";
     miscellaneous.makeDialogDraggable(dialog, dialogHeader);
 
-    document.getElementById("downloadButtonDf")
-    .addEventListener("click", async ()=> {
+    const downloadButtonDf = document.getElementById("downloadButtonDf");
+    downloadButtonDf.onclick = async () => {
 
       downloadButtonDf.disabled = true;
       const loader = document.getElementById("chartLoaderDf");
@@ -88,6 +122,28 @@ define([
 
       var classimage = await miscellaneous.DownloadDeforestation(response)
 
+      // Display Planet monthly mosaics: selected final month and one month before
+      const finalMonthMosaic = buildPlanetMosaicId(endDate, 0);
+      const previousMonthMosaic = buildPlanetMosaicId(endDate, -1);
+
+      if (previousMonthMosaic) {
+        addPlanetMosaicLayer(
+          view.map,
+          previousMonthMosaic,
+          "Planet mosaico (mes anterior)"
+        );
+      }
+
+      if (finalMonthMosaic) {
+        addPlanetMosaicLayer(
+          view.map,
+          finalMonthMosaic,
+          "Planet mosaico (mes final)"
+        );
+      }
+
+      await miscellaneous.addGeojsonLayer(view, classimage);
+
       // create blob file from the geojson
       const blob = new Blob([JSON.stringify(classimage)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -110,7 +166,7 @@ define([
         downloadButtonDf.disabled = false;
       }
 
-    });
+    };
     
   }
 
@@ -120,6 +176,9 @@ define([
     element.addEventListener("click", function() {
         dialog.style.display = "none"
   });
+  
+  return { processImage };
+});
   
   return { processImage };
 });
