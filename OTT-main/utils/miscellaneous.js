@@ -149,7 +149,7 @@ define([
   }
 
 
-  async function addMediaLayer(view, response, aoiGeometry) {
+  async function addMediaLayer(view, response, aoiGeometry, layerTitle = "Imagen PNG") {
 
     const blob = await response.blob();
 
@@ -808,3 +808,4 @@ async function DownloadBurns(image) {
     DownloadBurns
   };
 });
+
