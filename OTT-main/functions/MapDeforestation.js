@@ -23,20 +23,21 @@ define([
       const loader = document.getElementById("chartLoaderDf");
       loader.hidden = false;
 
-      const startDate = document.getElementById("startDateDf").value;
-      const endDate = document.getElementById("endDateDf").value;
-      const evalScript = evalScript_deforestation["MAP_DEFORESTATION"];
+      try {
+        const startDate = document.getElementById("startDateDf").value;
+        const endDate = document.getElementById("endDateDf").value;
+        const evalScript = evalScript_deforestation["MAP_DEFORESTATION"];
 
 
-      const isDateRangeValid = miscellaneous.validateDateRange(
-        startDate,
-        endDate
-      );
-      if (!isDateRangeValid) {
-        return;
-      }
+        const isDateRangeValid = miscellaneous.validateDateRange(
+          startDate,
+          endDate
+        );
+        if (!isDateRangeValid) {
+          return;
+        }
 
-      const body = JSON.stringify({
+        const body = JSON.stringify({
         input: {
           bounds: {
             geometry: {
@@ -74,43 +75,40 @@ define([
         evalscript: evalScript,
       });
 
-      fetch("http://localhost:3000/get-image", {
+      const response = await fetch("http://localhost:3000/get-image", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: body,
-      })
-        .then(async (response) => {
-  
-          if (!response.ok)
-            throw new Error(`Error fetching image: ${response.status}`);
-  
-          var classimage = await miscellaneous.DownloadDeforestation(response)
-  
-          // create blob file from the geojson
-          const blob = new Blob([JSON.stringify(classimage)], { type: "application/json" });
-          const url = URL.createObjectURL(blob);
-              
-          // create a link to download the file
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "VectoresDeforestacion.geojson"; //file download name
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-      
-          // release the blob file url
-          URL.revokeObjectURL(url);
-  
-          // hide the loader and activate the download button
-          loader.hidden = true;
-          downloadButtonDf.disabled = false;
-  
-        })
-        .catch((error) => {
-          console.error("Error al procesar la imagen:", error);
       });
+
+      if (!response.ok)
+        throw new Error(`Error fetching image: ${response.status}`);
+
+      var classimage = await miscellaneous.DownloadDeforestation(response)
+
+      // create blob file from the geojson
+      const blob = new Blob([JSON.stringify(classimage)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+          
+      // create a link to download the file
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "VectoresDeforestacion.geojson"; //file download name
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+  
+      // release the blob file url
+      URL.revokeObjectURL(url);
+  
+      } catch (error) {
+        console.error("Error al procesar la imagen:", error);
+      } finally {
+        loader.hidden = true;
+        downloadButtonDf.disabled = false;
+      }
 
     });
     
@@ -125,5 +123,3 @@ define([
   
   return { processImage };
 });
-
-
