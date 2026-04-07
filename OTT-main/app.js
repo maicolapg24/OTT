@@ -44,6 +44,17 @@ require([
   const DownloadPolygonButton = document.getElementById("downloadpolButton");
   const mapBurnsButton = document.getElementById("downloadpolBurnsButton");
   const SearchCatalogButton = document.getElementById("CatalogButton");
+  const aoiAreaInfo = document.getElementById("aoiAreaInfo");
+
+  function updateAoiArea(geometry) {
+    if (!aoiAreaInfo) {
+      return;
+    }
+
+    const areaLabel = miscellaneous.formatAOIArea(geometry);
+    aoiAreaInfo.textContent = `Tamaño AOI: ${areaLabel}`;
+    aoiAreaInfo.hidden = false;
+  }
 
   view.ui.add(
     [
@@ -68,7 +79,8 @@ require([
       mapDeforestationButton: mapDeforestationButton,
       DownloadPolygonButton: DownloadPolygonButton,
       mapBurnsButton: mapBurnsButton,
-      SearchCatalogButton: SearchCatalogButton
+      SearchCatalogButton: SearchCatalogButton,
+      onAoiChanged: updateAoiArea
     })
       .then((geometry) => {
         aoiGeometry = geometry;
@@ -83,7 +95,7 @@ require([
   });
 
   document.getElementById("browseGeoJson").addEventListener("change", (event) =>
-    UploadAoi.browseGeoJson(event, graphicsLayer, timeSeriesButton)
+    UploadAoi.browseGeoJson(event, graphicsLayer, timeSeriesButton, updateAoiArea)
       .then((geometry) => {
         aoiGeometry = geometry;
         timeSeriesButton.disabled = false;
