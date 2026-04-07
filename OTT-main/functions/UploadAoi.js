@@ -4,7 +4,7 @@ define([
   "esri/Graphic",
   "../utils/miscellaneous.js",
 ], function (Polygon, webMercatorUtils, Graphic, miscellaneous) {
-  browseGeoJson = (event, graphicsLayer, timeSeriesButton) => {
+  browseGeoJson = (event, graphicsLayer, timeSeriesButton, onAoiChanged) => {
     return new Promise((resolve) => {
       var file = event.target.files[0];
       if (file) {
@@ -35,6 +35,9 @@ define([
               graphicsLayer.removeAll();
               timeSeriesButton.disabled = true;
             } else {
+              if (onAoiChanged) {
+                onAoiChanged(mapGeometry);
+              }
               resolve(geometry)
             }
           });
