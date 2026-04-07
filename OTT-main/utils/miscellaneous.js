@@ -275,6 +275,17 @@ define([
     }
   }
 
+  function formatAOIArea(polygon) {
+    const areaSquareMeters = geometryEngine.geodesicArea(polygon, "square-meters");
+    const areaHectares = areaSquareMeters / 10000;
+
+    if (areaHectares >= 100) {
+      return `${areaHectares.toLocaleString("es-ES", { maximumFractionDigits: 0 })} ha`;
+    }
+
+    return `${areaHectares.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha`;
+  }
+
   function generateDateIntervals(startDate, endDate) {
     // Helper function to add a month to a date
     function addMonth(date) {
@@ -800,6 +811,7 @@ async function DownloadBurns(image) {
     generateDateIntervals,
     addTimeSlider,
     validateAOI,
+    formatAOIArea,
     switchTab,
     validateDateRange,
     clasifyIndex,
