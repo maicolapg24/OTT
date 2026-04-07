@@ -1,7 +1,7 @@
 define(["../utils/miscellaneous.js"], function (miscellaneous) {
 
   function startDrawing(params) {
-    const { sketchViewModel, graphicsLayer, view, timeSeriesButton, mapDeforestationButton, DownloadPolygonButton, mapBurnsButton, SearchCatalogButton } = params;
+    const { sketchViewModel, graphicsLayer, view, timeSeriesButton, mapDeforestationButton, DownloadPolygonButton, mapBurnsButton, SearchCatalogButton, onAoiChanged } = params;
 
     return new Promise((resolve, reject) => {
 
@@ -42,6 +42,10 @@ define(["../utils/miscellaneous.js"], function (miscellaneous) {
               mapBurnsButton.disabled = true;
               SearchCatalogButton.disabled = true;
             } else {
+              if (onAoiChanged) {
+                onAoiChanged(geometry);
+              }
+
               if (currentMode === "general") {
                 timeSeriesButton.disabled = false;
                 mapDeforestationButton.disabled = false;
