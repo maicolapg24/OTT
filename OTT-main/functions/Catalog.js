@@ -113,6 +113,10 @@ define([
                         const featureDate = e.target.getAttribute("data-date")
                         console.log(`Visualizando feature: ${featureId}`);
                         
+                        if (!featureId || featureId === "Sin ID") {
+                            throw new Error("El elemento seleccionado no tiene un ID válido para consulta BYOC.");
+                        }
+
                         const bodyDw1 = JSON.stringify({
                             input: {
                                 bounds: {
@@ -126,13 +130,14 @@ define([
                                 data: [
                                     {
                                         "dataFilter": {
+                                            "id": featureId,
                                             "timeRange": {
                                                 "from": `${featureDate.split("T")[0]}T00:00:00Z`,
                                                 "to": `${featureDate.split("T")[0]}T23:59:59Z`
                                             },
                                             "mosaickingOrder": "mostRecent"
                                         },
-                                        "type": "byoc-7c1511e7-42fd-41ee-925a-bedb3c24cc44",
+                                        "type": collection,
                                     },
                                 ],
                             },
@@ -183,6 +188,10 @@ define([
                     const featureDate = e.target.getAttribute("data-date")
                     console.log(`Descargando feature: ${featureId}`);
 
+                    if (!featureId || featureId === "Sin ID") {
+                        throw new Error("El elemento seleccionado no tiene un ID válido para consulta BYOC.");
+                    }
+
                     const bodyDw = JSON.stringify({
                         input: {
                         bounds: {
@@ -196,13 +205,14 @@ define([
                         data: [
                             {
                                 "dataFilter": {
+                                    "id": featureId,
                                     "timeRange": {
                                         "from": `${featureDate.split("T")[0]}T00:00:00Z`,
                                         "to": `${featureDate.split("T")[0]}T23:59:59Z`
                                     },
                                     "mosaickingOrder": "mostRecent"
                                     },
-                                    "type": "byoc-7c1511e7-42fd-41ee-925a-bedb3c24cc44",                                
+                                    "type": collection,                                
                             },
                         ],
                     },
@@ -231,7 +241,8 @@ define([
                     })
                     .then(async (response) => {
                         if (!response.ok) {
-                        throw new Error(`Error fetching image: ${response.status}`);
+                        const errorText = await response.text();
+                        throw new Error(`Error fetching image: ${response.status} - ${errorText}`);
                         }
 
                         const blob = await response.blob();
