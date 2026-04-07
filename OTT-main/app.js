@@ -10,6 +10,7 @@ require([
   "functions/ChangeDetection.js",
   "functions/Downloadpolygon.js",
   "functions/DownloadBurnsZones.js",
+  "functions/FloodMonitor.js",
   "functions/Catalog.js"
 ], function (
   GraphicsLayer,
@@ -23,6 +24,7 @@ require([
   ChageDetection,
   DownloadPolygon,
   DownloadBurnsZones,
+  FloodMonitor,
   SearchCatalog
 ) {
   const [map, view] = CreateMap.createMap();
@@ -44,6 +46,7 @@ require([
   const DownloadPolygonButton = document.getElementById("downloadpolButton");
   const mapBurnsButton = document.getElementById("downloadpolBurnsButton");
   const SearchCatalogButton = document.getElementById("CatalogButton");
+  const floodMonitorButton = document.getElementById("floodMonitorButton");
   const aoiAreaInfo = document.getElementById("aoiAreaInfo");
 
   function updateAoiArea(geometry) {
@@ -56,19 +59,20 @@ require([
     aoiAreaInfo.hidden = false;
   }
 
-  view.ui.add(
-    [
-      drawAoiButton,
-      uploadGeoJsonButton,
-      timeSeriesButton,
-      mapDeforestationButton,
-      subsButton,
-      DownloadPolygonButton,
-      mapBurnsButton,
-      SearchCatalogButton
-    ],
-    "top-right"
-  );
+view.ui.add(
+  [
+    drawAoiButton,
+    uploadGeoJsonButton,
+    timeSeriesButton,
+    mapDeforestationButton,
+    subsButton,
+    DownloadPolygonButton,
+    mapBurnsButton,
+    SearchCatalogButton,
+    floodMonitorButton
+  ],
+  "top-right"
+);
 
   drawAoiButton.addEventListener("click", () => {
     DrawAoi.startDrawing({
@@ -79,6 +83,7 @@ require([
       mapDeforestationButton: mapDeforestationButton,
       DownloadPolygonButton: DownloadPolygonButton,
       mapBurnsButton: mapBurnsButton,
+      floodMonitorButton: floodMonitorButton,
       SearchCatalogButton: SearchCatalogButton,
       onAoiChanged: updateAoiArea
     })
@@ -102,6 +107,7 @@ require([
         DownloadPolygonButton.disabled = false;
         DownloadBurnsZones.disabled = false;
         mapBurnsButton.disabled = false;
+        floodMonitorButton.disabled = false;
         mapDeforestationButton.disabled = false;
       })
       .catch((error) => {
@@ -132,5 +138,8 @@ require([
   SearchCatalogButton.addEventListener("click", async () =>{
     SearchCatalog.SearchCatalog(view, aoiGeometry)
   });
-});
 
+  floodMonitorButton.addEventListener("click", () =>
+    FloodMonitor.openFloodDialog(view, aoiGeometry)
+  );
+});
